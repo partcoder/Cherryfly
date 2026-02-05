@@ -1,8 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GeneratedMetadata } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize Gemini Client Lazily
+let ai: GoogleGenAI | null = null;
+
+const getGenAI = () => {
+  if (!ai) {
+    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing Gemini API Key. Please check your environment variables.");
+    }
+    ai = new GoogleGenAI({ apiKey });
+  }
+  return ai;
+};
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -16,12 +27,12 @@ async function runWithRetry<T>(fn: () => Promise<T>, retries = 3, initialDelay =
       return await fn();
     } catch (error: any) {
       // Check for 429 (Resource Exhausted) or 503 (Service Unavailable)
-      const isRateLimit = 
-        error?.status === 429 || 
-        error?.code === 429 || 
-        error?.message?.includes('429') || 
+      const isRateLimit =
+        error?.status === 429 ||
+        error?.code === 429 ||
+        error?.message?.includes('429') ||
         error?.status === 'RESOURCE_EXHAUSTED';
-      
+
       if (i === retries - 1 || !isRateLimit) {
         throw error;
       }
@@ -38,7 +49,7 @@ async function runWithRetry<T>(fn: () => Promise<T>, retries = 3, initialDelay =
  * Analyzes a video frame (base64 image) to generate a title, synopsis, and genre.
  */
 export const analyzeVideoFrame = async (base64Image: string): Promise<GeneratedMetadata> => {
-  const modelId = "gemini-3-flash-preview"; 
+  const modelId = "gemini-3-flash-preview";
 
   const prompt = `
     You are an AI archivist for a visual memory library called Cherryfly.
@@ -57,7 +68,7 @@ export const analyzeVideoFrame = async (base64Image: string): Promise<GeneratedM
 
   return runWithRetry(async () => {
     try {
-      const response = await ai.models.generateContent({
+      const response = await getGenAI().models.generateContent({
         model: modelId,
         contents: {
           parts: [
@@ -118,33 +129,33 @@ export const generateMoviePoster = async (metadata: GeneratedMetadata, base64Ima
 
   return runWithRetry(async () => {
     try {
-      const response = await ai.models.generateContent({
+      const response = await getGenAI().models.generateContent({
         model: modelId,
         contents: {
           parts: [
-              {
-                  inlineData: {
-                    mimeType: "image/jpeg",
-                    data: base64Image,
-                  },
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Image,
               },
-              { text: prompt }
+            },
+            { text: prompt }
           ],
         },
         config: {
           imageConfig: {
-              aspectRatio: "3:4",
+            aspectRatio: "3:4",
           }
         }
       });
 
       // Check for inline data (image)
       for (const part of response.candidates?.[0]?.content?.parts || []) {
-          if (part.inlineData && part.inlineData.data) {
-              return `data:image/png;base64,${part.inlineData.data}`;
-          }
+        if (part.inlineData && part.inlineData.data) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
       }
-      
+
       throw new Error("No image generated.");
     } catch (error) {
       console.error("Poster generation failed:", error);
@@ -171,12 +182,12 @@ export const generateComicPages = async (base64Image: string, metadata: Generate
   `;
 
   const extractImage = (response: any) => {
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-          if (part.inlineData && part.inlineData.data) {
-              return part.inlineData.data;
-          }
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData && part.inlineData.data) {
+        return part.inlineData.data;
       }
-      return null;
+    }
+    return null;
   };
 
   const imagePart = {
@@ -187,38 +198,38 @@ export const generateComicPages = async (base64Image: string, metadata: Generate
   };
 
   const pagePrompts = [
-      "Page 1 of 4. Introduce the character (from reference) in their setting. Establish the inciting incident or conflict.",
-      "Page 2 of 4. The character faces an obstacle. Tension rises. Action sequence or emotional dialogue.",
-      "Page 3 of 4. The climax of the scene. High drama, dynamic angles, major revelation or confrontation.",
-      "Page 4 of 4. Resolution or cliffhanger. The aftermath. Fade out or dramatic final panel."
+    "Page 1 of 4. Introduce the character (from reference) in their setting. Establish the inciting incident or conflict.",
+    "Page 2 of 4. The character faces an obstacle. Tension rises. Action sequence or emotional dialogue.",
+    "Page 3 of 4. The climax of the scene. High drama, dynamic angles, major revelation or confrontation.",
+    "Page 4 of 4. Resolution or cliffhanger. The aftermath. Fade out or dramatic final panel."
   ];
 
   try {
     for (const pageSpecificInstruction of pagePrompts) {
-        // Add a small delay before each request to respect rate limits (Requests Per Minute)
-        // Especially important since we are doing a loop
-        if (pages.length > 0) {
-            await delay(2000); 
-        }
+      // Add a small delay before each request to respect rate limits (Requests Per Minute)
+      // Especially important since we are doing a loop
+      if (pages.length > 0) {
+        await delay(2000);
+      }
 
-        await runWithRetry(async () => {
-            const fullPrompt = `${basePrompt} ${pageSpecificInstruction}`;
-            
-            const response = await ai.models.generateContent({
-                model: modelId,
-                contents: { parts: [imagePart, { text: fullPrompt }] },
-                config: { imageConfig: { aspectRatio: "3:4" } }
-            });
+      await runWithRetry(async () => {
+        const fullPrompt = `${basePrompt} ${pageSpecificInstruction}`;
 
-            const pageData = extractImage(response);
-            if (pageData) {
-                pages.push(`data:image/png;base64,${pageData}`);
-            }
+        const response = await getGenAI().models.generateContent({
+          model: modelId,
+          contents: { parts: [imagePart, { text: fullPrompt }] },
+          config: { imageConfig: { aspectRatio: "3:4" } }
         });
+
+        const pageData = extractImage(response);
+        if (pageData) {
+          pages.push(`data:image/png;base64,${pageData}`);
+        }
+      });
     }
 
     if (pages.length === 0) throw new Error("Failed to generate comic pages");
-    
+
     return pages;
   } catch (error) {
     console.error("Comic generation failed:", error);
