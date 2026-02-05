@@ -1,6 +1,6 @@
 import React from 'react';
 import { Movie } from '../types';
-import { Play } from 'lucide-react';
+import { Play, Loader2, Clock } from 'lucide-react';
 
 interface MovieRowProps {
   title: string;
@@ -28,14 +28,21 @@ const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onPlay }) => {
               <img 
                 src={movie.thumbnailUrl} 
                 alt={movie.title} 
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover ${movie.aiStatus === 'PENDING' ? 'opacity-50 grayscale' : ''}`}
                 loading="lazy"
               />
               
+              {movie.aiStatus === 'PENDING' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white p-2 text-center">
+                    <Clock className="animate-pulse mb-2 text-yellow-500" size={24} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Pending AI</span>
+                </div>
+              )}
+
               {/* Hover overlay */}
               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover/card:bg-opacity-40 transition-all duration-300 flex flex-col justify-end p-4 opacity-0 group-hover/card:opacity-100">
                 <div className="bg-white rounded-full w-10 h-10 flex items-center justify-center mb-2 shadow-lg">
-                    <Play className="fill-black w-5 h-5 ml-1" />
+                    {movie.aiStatus === 'PENDING' ? <Loader2 className="animate-spin text-black" size={20} /> : <Play className="fill-black w-5 h-5 ml-1" />}
                 </div>
                 <h3 className="text-white font-bold text-sm leading-tight drop-shadow-md">{movie.title}</h3>
                 <div className="text-[10px] text-green-400 font-bold mt-1">{movie.matchScore}% Match</div>

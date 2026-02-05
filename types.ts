@@ -13,6 +13,7 @@ export interface Movie {
   createdAt: string; // ISO Date string
   mediaType: 'VIDEO' | 'PHOTO' | 'COMIC';
   folderName?: string; // Custom folder name
+  aiStatus: 'COMPLETED' | 'PENDING' | 'FAILED'; // New field for fallback handling
 }
 
 export interface GeneratedMetadata {
@@ -29,6 +30,7 @@ export enum AnalysisStage {
   ANALYZING = 'ANALYZING',   // Gemini analyzing text
   GENERATING = 'GENERATING', // Gemini generating image
   GENERATING_COMIC = 'GENERATING_COMIC', // Gemini generating comic pages
+  SAVING = 'SAVING',         // Uploading to Supabase
   COMPLETE = 'COMPLETE',
   ERROR = 'ERROR'
 }

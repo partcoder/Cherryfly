@@ -1,8 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Film, Loader2, Wand2, Image as ImageIcon, BookOpen, Folder } from 'lucide-react';
-import { Movie, AnalysisStage } from '../types';
-import { extractFrame, convertFileToBase64 } from '../utils/videoUtils';
-import { analyzeVideoFrame, generateMoviePoster, generateComicPages } from '../services/geminiService';
+import { X, Upload, Film, Loader2, Wand2, Image as ImageIcon, BookOpen, Folder, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Movie, AnalysisStage, GeneratedMetadata } from '../types';
+import { extractFrames, convertFileToBase64 } from '../utils/videoUtils';
+import { analyzeVideoContent, generateMoviePoster, generateComicPages } from '../services/geminiService';
 import { saveMovieToStorage } from '../utils/db';
 
 interface UploadModalProps {
@@ -20,6 +21,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
   const [selectedFolder, setSelectedFolder] = useState('');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isFallbackMode, setIsFallbackMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -39,6 +41,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
       setFile(e.target.files[0]);
       setIsComicMode(false);
       setError(null);
+      setIsFallbackMode(false);
     }
   };
 
@@ -54,6 +57,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
             setFile(droppedFile);
             setIsComicMode(false);
             setError(null);
+            setIsFallbackMode(false);
         } else {
             setError("Please upload a video or image file.");
         }
@@ -64,7 +68,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
     if (!file) return;
 
     try {
-      let frameBase64 = '';
+      let frames: string[] = [];
       const isVideo = file.type.startsWith('video/');
       let mediaType: 'VIDEO' | 'PHOTO' | 'COMIC' = 'VIDEO';
       if (!isVideo) {
@@ -74,31 +78,68 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
       setStage(AnalysisStage.EXTRACTING);
       setProgress(5);
 
+      // 1. Extract Images
       if (isVideo) {
-        frameBase64 = await extractFrame(file, 2.0);
+        // Extract 2 frames (20% and 60%) to save credits but get context
+        frames = await extractFrames(file, 2);
       } else {
-        frameBase64 = await convertFileToBase64(file);
+        const base64 = await convertFileToBase64(file);
+        frames = [base64];
       }
       
-      setStage(AnalysisStage.ANALYZING);
-      setProgress(isVideo ? 30 : 20);
-      const metadata = await analyzeVideoFrame(frameBase64);
+      const primaryFrame = frames[0]; // Use the first extracted frame for poster generation
       
-      setStage(AnalysisStage.GENERATING);
-      setProgress(isVideo ? 60 : 40);
-      const posterUrl = await generateMoviePoster(metadata, frameBase64);
-
+      let metadata: GeneratedMetadata;
+      let posterUrl: string;
       let comicPages: string[] = [];
-      if (mediaType === 'COMIC') {
-          setStage(AnalysisStage.GENERATING_COMIC);
-          setProgress(60);
-          comicPages = await generateComicPages(frameBase64, metadata);
-      } else {
-          setProgress(80);
+      let aiStatus: 'COMPLETED' | 'PENDING' = 'COMPLETED';
+
+      // 2. AI Processing
+      try {
+          setStage(AnalysisStage.ANALYZING);
+          setProgress(isVideo ? 30 : 20);
+          
+          // Send all frames (1 or 2) to Gemini
+          metadata = await analyzeVideoContent(frames);
+          
+          setStage(AnalysisStage.GENERATING);
+          setProgress(isVideo ? 60 : 40);
+          
+          // Generate poster using the primary frame
+          try {
+            posterUrl = await generateMoviePoster(metadata, primaryFrame);
+          } catch (posterError) {
+             console.warn("Poster generation failed, using original frame:", posterError);
+             posterUrl = `data:image/jpeg;base64,${primaryFrame}`;
+          }
+
+          if (mediaType === 'COMIC') {
+              setStage(AnalysisStage.GENERATING_COMIC);
+              setProgress(60);
+              comicPages = await generateComicPages(primaryFrame, metadata);
+          } else {
+              setProgress(80);
+          }
+
+      } catch (aiError) {
+          console.error("AI Service Unavailable (Quota or Error):", aiError);
+          setIsFallbackMode(true);
+          aiStatus = 'PENDING';
+          
+          metadata = {
+              title: file.name.replace(/\.[^/.]+$/, ""),
+              description: "Waiting for AI analysis...",
+              searchContext: "pending upload",
+              genre: ["Unsorted"],
+              mood: "Raw"
+          };
+          
+          posterUrl = `data:image/jpeg;base64,${primaryFrame}`;
       }
 
-      setStage(AnalysisStage.COMPLETE);
-      setProgress(100);
+      // 3. Save to Storage & DB
+      setStage(AnalysisStage.SAVING);
+      setProgress(90);
 
       const createdAt = file.lastModified 
         ? new Date(file.lastModified).toISOString() 
@@ -112,16 +153,20 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
         thumbnailUrl: posterUrl,
         videoUrl: '', 
         comicPages: comicPages,
-        matchScore: Math.floor(Math.random() * (99 - 85) + 85),
+        matchScore: aiStatus === 'PENDING' ? 0 : Math.floor(Math.random() * (99 - 85) + 85),
         year: new Date(createdAt).getFullYear(),
         duration: mediaType === 'COMIC' ? "Comic Issue #1" : (mediaType === 'PHOTO' ? "Photo" : "Unknown"),
         genre: metadata.genre,
         createdAt: createdAt,
         mediaType: mediaType,
-        folderName: selectedFolder.trim() || undefined
+        folderName: selectedFolder.trim() || undefined,
+        aiStatus: aiStatus
       };
       
       await saveMovieToStorage(newMovie, file);
+
+      setStage(AnalysisStage.COMPLETE);
+      setProgress(100);
 
       setTimeout(() => {
         onMovieCreated({
@@ -129,7 +174,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
              videoUrl: URL.createObjectURL(file) 
         });
         resetModal();
-      }, 1000);
+      }, 1500);
 
     } catch (err: any) {
       console.error(err);
@@ -145,6 +190,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
     setError(null);
     setIsComicMode(false);
     setSelectedFolder('');
+    setIsFallbackMode(false);
     onClose();
   };
 
@@ -259,27 +305,40 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
           {stage !== AnalysisStage.IDLE && stage !== AnalysisStage.ERROR && (
              <div className="flex flex-col items-center justify-center py-6 md:py-8">
                 <div className="relative w-16 h-16 md:w-24 md:h-24 mb-6 md:mb-8">
-                    <Loader2 className="w-full h-full text-red-600 animate-spin" strokeWidth={1} />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <Wand2 className="w-6 h-6 md:w-10 md:h-10 text-white drop-shadow-lg" />
-                    </div>
+                    {stage === AnalysisStage.COMPLETE ? (
+                         isFallbackMode ? (
+                             <AlertTriangle className="w-full h-full text-yellow-500 animate-scale-in" />
+                         ) : (
+                             <CheckCircle className="w-full h-full text-green-500 animate-scale-in" />
+                         )
+                    ) : (
+                        <>
+                            <Loader2 className={`w-full h-full ${isFallbackMode ? 'text-yellow-500' : 'text-red-600'} animate-spin`} strokeWidth={1} />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <Wand2 className="w-6 h-6 md:w-10 md:h-10 text-white drop-shadow-lg" />
+                            </div>
+                        </>
+                    )}
                 </div>
                 
                 <h3 className="text-lg md:text-2xl font-bold text-white mb-2 text-center">
-                    {stage === AnalysisStage.EXTRACTING && "Processing..."}
-                    {stage === AnalysisStage.ANALYZING && "Dreaming..."}
-                    {stage === AnalysisStage.GENERATING && "Designing..."}
+                    {stage === AnalysisStage.EXTRACTING && "Processing Video..."}
+                    {stage === AnalysisStage.ANALYZING && "Gemini Analyzing Frames..."}
+                    {stage === AnalysisStage.GENERATING && "Designing Cover Art..."}
                     {stage === AnalysisStage.GENERATING_COMIC && "Inking Comic..."}
-                    {stage === AnalysisStage.COMPLETE && "Added!"}
+                    {stage === AnalysisStage.SAVING && "Saving to Cloud..."}
+                    {stage === AnalysisStage.COMPLETE && (isFallbackMode ? "Saved (Offline Mode)" : "Magic Complete!")}
                 </h3>
                 <p className="text-gray-400 text-xs md:text-sm mb-6 md:mb-8 text-center max-w-xs leading-relaxed">
-                    {stage === AnalysisStage.ANALYZING && "Gemini is watching your clip."}
-                    {stage === AnalysisStage.GENERATING && "Creating cinematic art."}
+                    {stage === AnalysisStage.ANALYZING && "Watching specific scenes to understand the plot."}
+                    {stage === AnalysisStage.GENERATING && "Creating a poster inspired by the video frames."}
+                    {isFallbackMode && stage !== AnalysisStage.COMPLETE && "AI busy, switching to offline upload..."}
+                    {stage === AnalysisStage.COMPLETE && isFallbackMode && "Upload successful. AI analysis will run later."}
                 </p>
 
                 <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
                     <div 
-                        className="bg-gradient-to-r from-red-600 to-red-400 h-1.5 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(220,38,38,0.5)]" 
+                        className={`h-1.5 rounded-full transition-all duration-500 ${isFallbackMode ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]' : 'bg-gradient-to-r from-red-600 to-red-400 shadow-[0_0_10px_rgba(220,38,38,0.5)]'}`}
                         style={{ width: `${progress}%` }}
                     ></div>
                 </div>
