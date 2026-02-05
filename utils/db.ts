@@ -8,39 +8,48 @@ const FOLDER_SEPARATOR = "|||FOLDER|||";
  * Helper to convert a Base64 Data URI to a Blob for uploading.
  */
 const base64ToBlob = (dataURI: string): Blob => {
-  const splitDataURI = dataURI.split(',');
-  const byteString = splitDataURI[0].indexOf('base64') >= 0 
-    ? atob(splitDataURI[1]) 
-    : decodeURI(splitDataURI[1]);
-  
-  const mimeString = splitDataURI[0].split(':')[1].split(';')[0];
-  const ia = new Uint8Array(byteString.length);
-  
-  for (let i = 0; i < byteString.length; i++) {
-    ia[i] = byteString.charCodeAt(i);
+  try {
+      const splitDataURI = dataURI.split(',');
+      const byteString = splitDataURI[0].indexOf('base64') >= 0 
+        ? atob(splitDataURI[1]) 
+        : decodeURI(splitDataURI[1]);
+      
+      const mimeString = splitDataURI[0].split(':')[1].split(';')[0];
+      const ia = new Uint8Array(byteString.length);
+      
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      
+      return new Blob([ia], { type: mimeString });
+  } catch (e) {
+      console.error("Error converting base64 to blob", e);
+      throw new Error("Failed to process image data.");
   }
-  
-  return new Blob([ia], { type: mimeString });
 };
 
 /**
  * Uploads a file (blob) to Supabase Storage and returns the public URL.
  */
 const uploadToStorage = async (path: string, blob: Blob): Promise<string> => {
+  // Sanitize path to ensure no invalid characters
+  const sanitizedPath = path.replace(/[^a-zA-Z0-9\/._-]/g, '_');
+
   const { data, error } = await supabase.storage
     .from('media')
-    .upload(path, blob, {
+    .upload(sanitizedPath, blob, {
       cacheControl: '3600',
       upsert: true
     });
 
   if (error) {
-    throw error;
+    console.error(`Upload failed for ${sanitizedPath}:`, error);
+    throw new Error(`Upload failed: ${error.message}`);
   }
 
   const { data: publicData } = supabase.storage
     .from('media')
-    .getPublicUrl(path);
+    .getPublicUrl(sanitizedPath);
 
   return publicData.publicUrl;
 };
@@ -64,14 +73,18 @@ export const saveMovieToStorage = async (movie: Movie, mainFile?: File): Promise
     }
 
     // 3. Upload Main Media File (Video or Photo)
+    // We intentionally allow this to throw an error if it fails.
+    // This prevents creating a database entry if the video file isn't safely in storage.
     let publicMediaUrl = '';
     if (mainFile) {
         const extension = mainFile.name.split('.').pop() || 'dat';
-        const mediaPath = `${movie.id}/main.${extension}`;
+        // Simple sanitization for extension
+        const cleanExtension = extension.replace(/[^a-zA-Z0-9]/g, '');
+        const mediaPath = `${movie.id}/main.${cleanExtension}`;
         publicMediaUrl = await uploadToStorage(mediaPath, mainFile);
     }
 
-    // 3. Save Metadata to DB
+    // 4. Save Metadata to DB
     // Format: description |||SEARCH_CTX||| searchContext |||FOLDER||| folderName
     let combinedDescription = `${movie.description}${SEARCH_SEPARATOR}${movie.searchContext || ''}`;
     if (movie.folderName) {
@@ -80,25 +93,26 @@ export const saveMovieToStorage = async (movie: Movie, mainFile?: File): Promise
 
     const { error } = await supabase
       .from('movies')
-      .insert({
+      .upsert({
         id: movie.id,
         title: movie.title,
         description: combinedDescription,
         thumbnail_url: publicThumbnailUrl,
-        video_url: publicMediaUrl, // Using video_url column for both video and photo URL
+        video_url: publicMediaUrl,
         comic_pages: publicComicUrls,
         match_score: movie.matchScore,
         year: movie.year,
         genre: movie.genre,
         created_at: movie.createdAt || new Date().toISOString(),
-        media_type: movie.mediaType || (movie.comicPages?.length ? 'COMIC' : 'VIDEO') // Default fallback
+        media_type: movie.mediaType || (movie.comicPages?.length ? 'COMIC' : 'VIDEO') 
       });
 
     if (error) throw error;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving to Supabase:', error);
-    throw new Error('Failed to save to cloud storage.');
+    // Propagate error so the UI shows "Failed" instead of "Added"
+    throw new Error(error.message || 'Failed to save to cloud storage.');
   }
 };
 
@@ -106,17 +120,7 @@ export const updateMovieInStorage = async (id: string, updates: Partial<Movie>):
   const dbUpdates: any = {};
   if (updates.title) dbUpdates.title = updates.title;
   
-  // We need to fetch the current record to properly construct the description string if we are updating parts of it
-  // But for simplicity in this demo, we assume the UI passes the full object or we just handle what we have.
-  // Ideally, we'd read -> merge -> save.
-  
   if (updates.description !== undefined || updates.searchContext !== undefined || updates.folderName !== undefined) {
-      // Since the caller usually has the full movie object state in the EditModal, 
-      // we expect them to pass the *current* state of the other fields if they aren't changing,
-      // OR we fetch here. Let's rely on the passed updates having what we need if it's a "save" operation.
-      // However, `updates` is Partial. 
-      
-      // Let's do a quick fetch to get current state if we are doing a partial update on these fields
       const { data: current } = await supabase.from('movies').select('description').eq('id', id).single();
       if (current) {
           const fullDesc = current.description || '';
@@ -156,7 +160,6 @@ export const updateMovieInStorage = async (id: string, updates: Partial<Movie>):
 };
 
 export const deleteMovieFromStorage = async (id: string): Promise<void> => {
-    // 1. Delete record from DB
     const { error } = await supabase
       .from('movies')
       .delete()
@@ -167,7 +170,6 @@ export const deleteMovieFromStorage = async (id: string): Promise<void> => {
       throw error;
     }
 
-    // 2. Cleanup Storage (Optional but recommended)
     const filesToDelete = [`${id}/poster.png`, `${id}/main.mp4`, `${id}/main.png`, `${id}/main.jpg`, `${id}/main.jpeg`, `${id}/main.mov`];
     for(let i=1; i<=4; i++) filesToDelete.push(`${id}/page_${i}.png`);
     
@@ -188,7 +190,6 @@ export const getMoviesFromStorage = async (): Promise<Movie[]> => {
   return data.map((row: any) => {
     const fullDesc = row.description || '';
     
-    // Parse our custom format: desc |||SEARCH||| context |||FOLDER||| folderName
     const [visibleDesc, rest] = fullDesc.split(SEARCH_SEPARATOR);
     let hiddenSearch = '';
     let folderName = '';
@@ -199,11 +200,10 @@ export const getMoviesFromStorage = async (): Promise<Movie[]> => {
         folderName = folder || '';
     }
 
-    // Determine media type if missing (migration compat)
     let mType = row.media_type;
     if (!mType) {
         if (row.comic_pages && row.comic_pages.length > 0) mType = 'COMIC';
-        else mType = 'VIDEO'; // Assume video for old records
+        else mType = 'VIDEO';
     }
 
     return {

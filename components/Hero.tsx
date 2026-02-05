@@ -60,26 +60,26 @@ const Hero: React.FC<HeroProps> = ({ movie, onPlay, onUploadClick, onEditClick }
       </div>
 
       {/* Content */}
-      <div className="absolute top-[20%] md:top-[30%] left-4 md:left-12 max-w-[95%] md:max-w-xl z-20 animate-slide-up">
+      <div className="absolute top-[28%] md:top-[30%] left-4 md:left-12 max-w-[95%] md:max-w-xl z-20 animate-slide-up">
         <h1 className="text-3xl md:text-6xl font-bold mb-2 md:mb-4 drop-shadow-2xl leading-tight tracking-tight line-clamp-2 text-white">
           {movie.title}
         </h1>
         
-        <div className="flex items-center flex-wrap gap-2 md:gap-3 mb-4 md:mb-6 font-medium text-xs md:text-base">
+        <div className="flex items-center flex-wrap gap-2 md:gap-3 mb-2 md:mb-6 font-medium text-xs md:text-base">
             <span className="text-green-400 font-bold drop-shadow-md">{movie.matchScore}% Match</span>
             <span className="text-gray-200 drop-shadow-md">{movie.year}</span>
             <span className="border border-gray-400/50 bg-black/30 backdrop-blur-sm text-gray-200 px-1.5 py-0.5 text-[10px] md:text-xs rounded">HD</span>
             <span className="text-gray-200 drop-shadow-md">{movie.duration}</span>
         </div>
 
-        <p className="text-xs md:text-lg text-gray-200 mb-6 md:mb-8 drop-shadow-lg line-clamp-3 leading-relaxed max-w-lg font-light">
+        <p className="text-xs md:text-lg text-gray-200 mb-4 md:mb-8 drop-shadow-lg line-clamp-3 leading-relaxed max-w-lg font-light">
           {movie.description}
         </p>
 
         <div className="flex flex-wrap items-center gap-3 md:gap-4">
           <button 
             onClick={() => onPlay(movie)}
-            className="bg-white text-black px-5 py-2 md:px-8 md:py-3 rounded-md flex items-center font-bold hover:bg-gray-200 transition transform hover:scale-105 shadow-xl text-sm md:text-base"
+            className="bg-white text-black px-5 py-2 md:px-8 md:py-3 rounded-full flex items-center font-bold hover:bg-gray-200 transition transform hover:scale-105 shadow-xl text-sm md:text-base"
           >
             <ActionIcon className="w-4 h-4 md:w-5 md:h-5 mr-2 fill-current" />
             {actionText}
@@ -87,7 +87,7 @@ const Hero: React.FC<HeroProps> = ({ movie, onPlay, onUploadClick, onEditClick }
           
           <button 
             onClick={() => onEditClick(movie)}
-            className="glass bg-white/20 text-white px-5 py-2 md:px-8 md:py-3 rounded-md flex items-center font-bold hover:bg-white/30 transition transform hover:scale-105 shadow-xl border border-white/20 backdrop-blur-md text-sm md:text-base"
+            className="glass bg-white/20 text-white px-5 py-2 md:px-8 md:py-3 rounded-full flex items-center font-bold hover:bg-white/30 transition transform hover:scale-105 shadow-xl border border-white/20 backdrop-blur-md text-sm md:text-base"
           >
             <Pencil className="w-4 h-4 md:w-5 md:h-5 mr-2" />
             Edit

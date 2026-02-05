@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import { X, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Movie } from '../types';
 
 interface VideoPlayerProps {
@@ -91,14 +91,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ movie, onClose }) => {
         <X size={28} />
       </button>
 
-      <div className="w-full h-full relative">
-        <video 
-            ref={videoRef}
-            src={movie.videoUrl} 
-            className="w-full h-full object-contain"
-            controls 
-            playsInline
-        />
+      <div className="w-full h-full relative flex items-center justify-center">
+        {movie.videoUrl ? (
+             <video 
+                ref={videoRef}
+                src={movie.videoUrl} 
+                className="w-full h-full object-contain"
+                controls 
+                playsInline
+            />
+        ) : (
+            <div className="text-center p-8 bg-white/5 rounded-xl border border-white/10">
+                <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                <h3 className="text-white text-xl font-bold mb-2">Video Unavailable</h3>
+                <p className="text-gray-400 max-w-sm">The video file for "{movie.title}" could not be found. It may have failed to upload.</p>
+            </div>
+        )}
+       
         <div className="absolute top-4 left-4 p-4 bg-gradient-to-b from-black to-transparent w-full pointer-events-none">
             <h2 className="text-white text-lg md:text-2xl font-bold drop-shadow-md pr-12 truncate">{movie.title}</h2>
         </div>

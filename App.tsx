@@ -173,8 +173,12 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Main Content Area: Adjusted top margins for better mobile layout */}
-      <div className={`relative z-10 pb-10 space-y-6 md:space-y-8 ${viewMode === 'STREAM' ? '-mt-12 md:-mt-32' : 'pt-32 md:pt-24'}`}>
+      {/* Main Content Area: Adjusted top margins for better mobile layout. 
+          Mobile Navbar height is approx 100px. 
+          If Stream view (Hero exists), we pull content up (-mt). 
+          If other views, we push content down (pt).
+      */}
+      <div className={`relative z-10 pb-10 space-y-6 md:space-y-8 ${viewMode === 'STREAM' ? '-mt-16 md:-mt-32' : 'pt-36 md:pt-24'}`}>
         
         {(searchQuery || activeFilter !== 'ALL') && (
              <div className="px-4 md:px-12 pt-8 animate-slide-up">

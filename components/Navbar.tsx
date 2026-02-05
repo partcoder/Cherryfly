@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Layout, Grid, List, Plus } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -14,6 +14,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ onUploadClick, onSearch, activeFilter, onFilterChange, viewMode, onViewChange }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -24,8 +25,19 @@ const Navbar: React.FC<NavbarProps> = ({ onUploadClick, onSearch, activeFilter, 
       }
     };
 
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+        window.removeEventListener('scroll', handleScroll);
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const navItems = [
@@ -44,13 +56,13 @@ const Navbar: React.FC<NavbarProps> = ({ onUploadClick, onSearch, activeFilter, 
         }`}
     >
       <div className="flex items-center justify-between px-4 md:px-12 py-3 md:py-4">
-        <div className="flex items-center space-x-4 md:space-x-8">
+        <div className="flex items-center space-x-2 md:space-x-8">
           {/* Logo */}
           <div 
-            className="flex items-center gap-1 cursor-pointer group"
+            className={`flex items-center gap-1 cursor-pointer group transition-all duration-300 ${isSearchOpen ? 'opacity-0 md:opacity-100 w-0 md:w-auto overflow-hidden' : 'opacity-100'}`}
             onClick={() => onFilterChange('ALL')}
           >
-            <span className="text-red-600 text-xl md:text-3xl font-bold tracking-tighter group-hover:text-red-500 transition-colors drop-shadow-lg">CHERRYFLY</span>
+            <span className="text-red-600 text-xl md:text-3xl font-bold tracking-tighter group-hover:text-red-500 transition-colors drop-shadow-lg whitespace-nowrap">CHERRYFLY</span>
           </div>
 
           {/* Navigation Links (Desktop) */}
@@ -71,7 +83,7 @@ const Navbar: React.FC<NavbarProps> = ({ onUploadClick, onSearch, activeFilter, 
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 md:space-x-6 text-white">
+        <div className="flex items-center space-x-2 md:space-x-6 text-white justify-end flex-1 md:flex-none">
             {/* View Switcher (Desktop) */}
             <div className="hidden sm:flex items-center glass rounded-full p-1">
                 <button 
@@ -98,30 +110,32 @@ const Navbar: React.FC<NavbarProps> = ({ onUploadClick, onSearch, activeFilter, 
             </div>
 
           {/* Search */}
-          <div className={`flex items-center transition-all duration-300 rounded-full ${isSearchOpen ? 'glass pl-2 pr-3 py-1 absolute right-16 md:static md:right-auto z-50 bg-black/90 md:bg-transparent' : ''}`}>
-            <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="p-2 hover:bg-white/10 rounded-full transition">
+          <div 
+            ref={searchRef}
+            className={`flex items-center transition-all duration-300 rounded-full ${isSearchOpen ? 'glass pl-2 pr-3 py-1 bg-black/50' : ''}`}
+          >
+            <button onClick={() => setIsSearchOpen(!isSearchOpen)} className="p-2 hover:bg-white/10 rounded-full transition shrink-0">
                 <Search className="w-5 h-5 text-gray-300" />
             </button>
             <input 
                 type="text" 
                 placeholder="Search..." 
-                className={`${isSearchOpen ? 'w-32 md:w-48 ml-2' : 'w-0'} bg-transparent border-none outline-none text-white text-sm transition-all duration-300 placeholder-gray-500`}
+                className={`${isSearchOpen ? 'w-28 md:w-48 ml-2' : 'w-0'} bg-transparent border-none outline-none text-white text-sm transition-all duration-300 placeholder-gray-500`}
                 onChange={(e) => onSearch(e.target.value)}
-                onBlur={() => !isSearchOpen && setIsSearchOpen(false)}
             />
           </div>
 
           {/* Upload Button */}
           <button 
             onClick={onUploadClick}
-            className="flex items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 rounded-full transition-all duration-300 hover:scale-105 group shadow-[0_0_15px_rgba(255,255,255,0.05)] hover:shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+            className="flex items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 rounded-full transition-all duration-300 hover:scale-105 group shadow-[0_0_15px_rgba(255,255,255,0.05)] hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] shrink-0"
             title="Upload Memory"
           >
             <Plus size={18} className="md:mr-2" />
             <span className="hidden md:inline font-medium text-sm">Upload</span>
           </button>
           
-          <div className="flex items-center space-x-2 cursor-pointer ml-1">
+          <div className="flex items-center space-x-2 cursor-pointer ml-1 shrink-0">
             <img 
               src="https://picsum.photos/seed/cherry/40/40" 
               alt="Profile" 
