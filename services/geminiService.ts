@@ -107,7 +107,7 @@ export const generateComicPages = async (base64Image: string, metadata: Generate
   const imagePart = { inlineData: { mimeType: "image/jpeg", data: base64Image } };
 
   for (let i = 1; i <= 4; i++) {
-    const response = await ai.models.generateContent({
+    const response = await getGenAI().models.generateContent({
       model: modelId,
       contents: { parts: [imagePart, { text: `Comic page ${i} for "${metadata.title}". Style: ${metadata.mood}.` }] },
       config: { imageConfig: { aspectRatio: "3:4" } }
