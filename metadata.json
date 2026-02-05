@@ -1,0 +1,5 @@
+{
+  "name": "Netfliify - AI Video Library",
+  "description": "A personal video library that uses Gemini AI to analyze your uploads, generate cinematic titles and synopses, and create stunning movie posters, turning your clips into a professional streaming experience.",
+  "requestFramePermissions": []
+}
