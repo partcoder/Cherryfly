@@ -113,8 +113,14 @@ const App: React.FC = () => {
             );
         }
 
-        return result;
+        return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [movies, searchQuery, activeFilter]);
+
+    const featuredMovie = useMemo(() => {
+        // Find the most recent movie marked as featured
+        const featured = filteredMovies.find(m => m.isFeatured);
+        return featured || filteredMovies[0];
+    }, [filteredMovies]);
 
     const groupedMovies = useMemo(() => {
         const groups: { [key: string]: Movie[] } = {};
@@ -159,11 +165,13 @@ const App: React.FC = () => {
     }, [filteredMovies]);
 
     const sortedGroupKeys = Object.keys(groupedMovies).sort((a, b) => {
-        const itemA = groupedMovies[a][0];
-        const itemB = groupedMovies[b][0];
-        if (!itemA || !itemB) return 0;
-        const dateA = new Date(itemA.createdAt).getTime();
-        const dateB = new Date(itemB.createdAt).getTime();
+        const moviesA = groupedMovies[a];
+        const moviesB = groupedMovies[b];
+        if (!moviesA?.[0] || !moviesB?.[0]) return 0;
+
+        // Sort groups by the newest item in each group
+        const dateA = new Date(moviesA[0].createdAt).getTime();
+        const dateB = new Date(moviesB[0].createdAt).getTime();
         return dateB - dateA;
     });
 
@@ -180,7 +188,7 @@ const App: React.FC = () => {
 
             {viewMode === 'STREAM' && (
                 <Hero
-                    movie={filteredMovies[0]}
+                    movie={featuredMovie}
                     onPlay={setPlayingMovie}
                     onUploadClick={() => openUploadModal()}
                     onEditClick={setEditingMovie}

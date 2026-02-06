@@ -23,8 +23,14 @@ const AddToAlbumModal: React.FC<AddToAlbumModalProps> = ({ movie, isOpen, onClos
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const targetFiles = e.target.files as FileList;
         if (targetFiles && targetFiles.length > 0) {
+            // Deduplicate files by name and size
             const selectedFiles = Array.from(targetFiles).filter(f => f.type.startsWith('image/'));
-            setFiles(selectedFiles);
+            const uniqueFiles = selectedFiles.filter((file, index, self) =>
+                index === self.findIndex((t) => (
+                    t.name === file.name && t.size === file.size
+                ))
+            );
+            setFiles(uniqueFiles);
         }
     };
 

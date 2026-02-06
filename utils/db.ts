@@ -32,6 +32,11 @@ export const saveMovieToStorage = async (movie: Movie, mainFile?: File): Promise
   }
 
   let mediaUrl = movie.videoUrl;
+  // If videoUrl is a blob URL, we ignore it (it's temporary/local only)
+  if (mediaUrl && mediaUrl.startsWith('blob:')) {
+    mediaUrl = '';
+  }
+
   if (mainFile) {
     const ext = mainFile.name.split('.').pop() || 'file';
     mediaUrl = await uploadToStorage(`${movie.id}/main.${ext}`, mainFile);
@@ -61,7 +66,12 @@ export const saveMovieToStorage = async (movie: Movie, mainFile?: File): Promise
   }
 
   // Deduplicate URLs (defensive)
-  const uniquePages = Array.from(new Set(finalComicPages));
+  const uniquePages = Array.from(new Set(finalComicPages)).filter(p => !!p);
+
+  // Fallback mediaUrl for photo sets if not already set
+  if (!mediaUrl && uniquePages.length > 0) {
+    mediaUrl = uniquePages[0];
+  }
 
   // 2. Pack ALL metadata into the description string
   const packedMeta = [
@@ -73,6 +83,8 @@ export const saveMovieToStorage = async (movie: Movie, mainFile?: File): Promise
     `THUMB${FIELD_SEP}${thumbnailUrl || ''}`,
     `YEAR${FIELD_SEP}${movie.year}`,
     `MATCH${FIELD_SEP}${movie.matchScore}`,
+    `ENDDATE${FIELD_SEP}${movie.endDate || ''}`,
+    `FEATURED${FIELD_SEP}${movie.isFeatured ? 'true' : 'false'}`,
     `GENRE${FIELD_SEP}${JSON.stringify(movie.genre)}`,
     `COMIC${FIELD_SEP}${JSON.stringify(uniquePages)}`,
     `DESC${FIELD_SEP}${movie.description || ''}`
@@ -205,9 +217,11 @@ export const getMoviesFromStorage = async (): Promise<Movie[]> => {
       genre: parseJSON(meta.GENRE, row.genre || []),
       comicPages: comicPages,
       createdAt: row.created_at,
+      endDate: meta.ENDDATE || undefined,
       mediaType: mediaType,
       folderName: meta.FOLDER || undefined,
-      aiStatus: (meta.STATUS as any) || 'COMPLETED'
+      aiStatus: (meta.STATUS as any) || 'COMPLETED',
+      isFeatured: meta.FEATURED === 'true'
     };
   });
 };
@@ -245,9 +259,11 @@ export const updateMovieInStorage = async (id: string, updates: Partial<Movie>):
     genre: parseJSON(meta.GENRE, []),
     comicPages: parseJSON(meta.COMIC, []),
     createdAt: data.created_at,
+    endDate: meta.ENDDATE || undefined,
     mediaType: (meta.TYPE as any) || 'VIDEO',
     folderName: meta.FOLDER || undefined,
-    aiStatus: (meta.STATUS as any) || 'COMPLETED'
+    aiStatus: (meta.STATUS as any) || 'COMPLETED',
+    isFeatured: meta.FEATURED === 'true'
   };
 
   const updatedMovie = { ...currentMovie, ...updates };

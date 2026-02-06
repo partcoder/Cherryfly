@@ -19,9 +19,26 @@ const TimelineView: React.FC<TimelineViewProps> = ({ movies, onPlay, onEdit, onD
 
       {movies.map((movie, index) => {
         const isLeft = index % 2 === 0;
-        const date = new Date(movie.createdAt).toLocaleDateString(undefined, {
-          weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+        const startDate = new Date(movie.createdAt);
+        const startStr = startDate.toLocaleDateString(undefined, {
+          month: 'short', day: 'numeric'
         });
+        const yearStr = startDate.getFullYear();
+
+        let dateDisplay = `${startStr}, ${yearStr}`;
+        if (movie.endDate) {
+          const endDate = new Date(movie.endDate);
+          const endStr = endDate.toLocaleDateString(undefined, {
+            month: 'short', day: 'numeric'
+          });
+          const endYearStr = endDate.getFullYear();
+
+          if (yearStr === endYearStr) {
+            dateDisplay = `${startStr} - ${endStr}, ${yearStr}`;
+          } else {
+            dateDisplay = `${startStr}, ${yearStr} - ${endStr}, ${endYearStr}`;
+          }
+        }
 
         return (
           <div key={movie.id} className={`relative flex items-center justify-between mb-8 md:mb-12 ${isLeft ? 'flex-row' : 'flex-row-reverse'} group`}>
@@ -38,7 +55,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ movies, onPlay, onEdit, onD
               >
                 <div className={`flex items-center gap-2 text-gray-400 text-[10px] md:text-xs mb-2 ${isLeft ? 'md:justify-end' : ''}`}>
                   <Calendar size={12} />
-                  {date}
+                  {dateDisplay}
                 </div>
 
                 <h3 className="text-white font-bold text-base md:text-lg mb-1 line-clamp-1">{movie.title}</h3>

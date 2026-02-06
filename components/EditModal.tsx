@@ -18,11 +18,15 @@ const EditModal: React.FC<EditModalProps> = ({ movie, isOpen, onClose, onSave, o
     const [folderName, setFolderName] = useState(movie.folderName || '');
     const [searchContext, setSearchContext] = useState(movie.searchContext || '');
     const [date, setDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [isRange, setIsRange] = useState(false);
     const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
     const [albumPhotos, setAlbumPhotos] = useState<string[]>([]);
     const [pendingThumbnailUrl, setPendingThumbnailUrl] = useState(movie.thumbnailUrl);
     const [deletingPhotoIndex, setDeletingPhotoIndex] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [aiStatus, setAiStatus] = useState(movie.aiStatus);
+    const [isFeatured, setIsFeatured] = useState(!!movie.isFeatured);
 
     useEffect(() => {
         if (isOpen) {
@@ -31,13 +35,23 @@ const EditModal: React.FC<EditModalProps> = ({ movie, isOpen, onClose, onSave, o
             setFolderName(movie.folderName || '');
             setSearchContext(movie.searchContext || '');
             const d = movie.createdAt ? new Date(movie.createdAt) : new Date();
-            const dateString = d.toISOString().split('T')[0];
-            setDate(dateString);
+            setDate(d.toISOString().split('T')[0]);
+
+            if (movie.endDate) {
+                setEndDate(new Date(movie.endDate).toISOString().split('T')[0]);
+                setIsRange(true);
+            } else {
+                setEndDate('');
+                setIsRange(false);
+            }
+
             setIsDeleteConfirming(false);
             setAlbumPhotos(movie.comicPages || []);
             setPendingThumbnailUrl(movie.thumbnailUrl);
             setDeletingPhotoIndex(null);
             setIsSaving(false);
+            setAiStatus(movie.aiStatus);
+            setIsFeatured(!!movie.isFeatured);
         }
     }, [movie, isOpen]);
 
@@ -53,8 +67,11 @@ const EditModal: React.FC<EditModalProps> = ({ movie, isOpen, onClose, onSave, o
                 searchContext,
                 folderName: folderName.trim() === '' ? undefined : folderName.trim(),
                 createdAt: new Date(date).toISOString(),
+                endDate: isRange && endDate ? new Date(endDate).toISOString() : undefined,
                 comicPages: movie.mediaType === 'PHOTO' ? albumPhotos : movie.comicPages,
-                thumbnailUrl: pendingThumbnailUrl
+                thumbnailUrl: pendingThumbnailUrl,
+                aiStatus,
+                isFeatured
             });
             onClose();
         } catch (err: any) {
@@ -147,16 +164,45 @@ const EditModal: React.FC<EditModalProps> = ({ movie, isOpen, onClose, onSave, o
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="flex items-center text-xs text-gray-400 mb-1 uppercase font-bold tracking-wider">
-                                <Calendar size={12} className="mr-1" /> Date
-                            </label>
-                            <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                className="w-full bg-black/30 text-white p-3 rounded border border-white/5 focus:border-red-600 outline-none transition text-sm"
-                            />
+                        <div className="md:col-span-2">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="flex items-center text-xs text-gray-400 uppercase font-bold tracking-wider">
+                                    <Calendar size={12} className="mr-1" /> Dates
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-gray-400 uppercase font-bold">Range Mode</span>
+                                    <button
+                                        onClick={() => setIsRange(!isRange)}
+                                        className={`w-8 h-4 rounded-full transition-colors relative ${isRange ? 'bg-red-600' : 'bg-gray-700'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isRange ? 'left-4.5' : 'left-0.5'}`} style={{ left: isRange ? '18px' : '2px' }}></div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] text-gray-500 mb-1 uppercase font-bold">{isRange ? 'From' : 'Date'}</p>
+                                    <input
+                                        type="date"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                        className="w-full bg-black/30 text-white p-3 rounded border border-white/5 focus:border-red-600 outline-none transition text-sm"
+                                    />
+                                </div>
+                                {isRange && (
+                                    <div className="animate-slide-in-right">
+                                        <p className="text-[10px] text-gray-500 mb-1 uppercase font-bold">To</p>
+                                        <input
+                                            type="date"
+                                            value={endDate}
+                                            min={date}
+                                            onChange={(e) => setEndDate(e.target.value)}
+                                            className="w-full bg-black/30 text-white p-3 rounded border border-white/5 focus:border-red-600 outline-none transition text-sm"
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div>
@@ -188,6 +234,42 @@ const EditModal: React.FC<EditModalProps> = ({ movie, isOpen, onClose, onSave, o
                             placeholder="AI extracted context..."
                             className="w-full bg-black/30 text-gray-300 p-3 rounded border border-dashed border-white/10 focus:border-blue-500 outline-none transition text-xs"
                         />
+                    </div>
+
+                    <div className="pt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="flex items-center justify-between p-3 rounded bg-white/5 border border-white/10">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${aiStatus === 'COMPLETED' ? 'bg-green-500/20 text-green-500' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                                    {aiStatus === 'COMPLETED' ? <Check size={16} /> : <Loader2 size={16} className="animate-spin" />}
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-white">AI Status</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setAiStatus(aiStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED')}
+                                className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${aiStatus === 'COMPLETED' ? 'bg-gray-700 text-gray-300' : 'bg-blue-600 text-white'}`}
+                            >
+                                {aiStatus === 'COMPLETED' ? 'Reset' : 'Complete'}
+                            </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 rounded bg-white/5 border border-white/10">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${isFeatured ? 'bg-red-500/20 text-red-500' : 'bg-gray-500/20 text-gray-500'}`}>
+                                    <ImageIcon size={16} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-white">Featured</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsFeatured(!isFeatured)}
+                                className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${isFeatured ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+                            >
+                                {isFeatured ? 'Featured' : 'Mark Featured'}
+                            </button>
+                        </div>
                     </div>
 
                     {movie.mediaType === 'PHOTO' && albumPhotos.length > 0 && (

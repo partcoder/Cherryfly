@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Film, Loader2, Wand2, Image as ImageIcon, BookOpen, Folder, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, Upload, Film, Loader2, Wand2, Image as ImageIcon, BookOpen, Folder, AlertTriangle, CheckCircle, Calendar } from 'lucide-react';
 import { Movie, AnalysisStage, GeneratedMetadata } from '../types';
 import { extractFrames, convertFileToBase64 } from '../utils/videoUtils';
 import { analyzeVideoContent, generateMoviePoster, generateComicPages } from '../services/geminiService';
@@ -23,6 +23,10 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
   const [error, setError] = useState<string | null>(null);
   const [isFallbackMode, setIsFallbackMode] = useState(false);
   const [isMagicEnabled, setIsMagicEnabled] = useState(true);
+  const [customDate, setCustomDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [isDateRange, setIsDateRange] = useState(false);
+  const [isFeatured, setIsFeatured] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -188,9 +192,11 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
       setStage(AnalysisStage.SAVING);
       setProgress(90);
 
-      const createdAt = primaryFile.lastModified
-        ? new Date(primaryFile.lastModified).toISOString()
-        : new Date().toISOString();
+      const createdAt = customDate
+        ? new Date(customDate).toISOString()
+        : (primaryFile.lastModified ? new Date(primaryFile.lastModified).toISOString() : new Date().toISOString());
+
+      const endDate = (isDateRange && customEndDate) ? new Date(customEndDate).toISOString() : undefined;
 
       const newMovie: Movie = {
         id: crypto.randomUUID(),
@@ -205,9 +211,11 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
         duration: mediaType === 'COMIC' ? "Comic Issue #1" : (mediaType === 'PHOTO' ? "Photo" : "Unknown"),
         genre: metadata.genre,
         createdAt: createdAt,
+        endDate: endDate,
         mediaType: mediaType,
         folderName: selectedFolder.trim() || undefined,
-        aiStatus: aiStatus
+        aiStatus: aiStatus,
+        isFeatured: isFeatured
       };
 
       // For photos, if it's a single photo, pass it as mainFile so saveMovieToStorage uploads it
@@ -372,6 +380,78 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onMovieCreat
                         className="sr-only peer"
                         checked={isComicMode}
                         onChange={(e) => setIsComicMode(e.target.checked)}
+                      />
+                      <div className="w-9 h-5 md:w-11 md:h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 md:after:h-5 md:after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Date Control */}
+                  <div className="glass p-3 md:p-4 rounded-xl border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="p-2 bg-blue-500/10 rounded-lg">
+                          <Calendar className="text-blue-500" size={18} />
+                        </div>
+                        <div>
+                          <p className="text-white font-bold text-xs md:text-sm">Memory Date</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-500 uppercase font-bold">Range</span>
+                        <label className="relative inline-flex items-center cursor-pointer scale-75 md:scale-90">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={isDateRange}
+                            onChange={(e) => setIsDateRange(e.target.checked)}
+                          />
+                          <div className="w-9 h-5 md:w-11 md:h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 md:after:h-5 md:after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className={`${isDateRange ? 'col-span-1' : 'col-span-2'}`}>
+                        <p className="text-[9px] text-gray-500 mb-1 uppercase font-bold">{isDateRange ? 'From' : 'Select Date'}</p>
+                        <input
+                          type="date"
+                          value={customDate}
+                          onChange={(e) => setCustomDate(e.target.value)}
+                          className="bg-black/40 text-white text-xs md:text-sm px-2 py-1.5 rounded border border-white/10 focus:border-red-600 outline-none w-full"
+                        />
+                      </div>
+                      {isDateRange && (
+                        <div className="animate-slide-in-right">
+                          <p className="text-[9px] text-gray-500 mb-1 uppercase font-bold">To</p>
+                          <input
+                            type="date"
+                            value={customEndDate}
+                            min={customDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            className="bg-black/40 text-white text-xs md:text-sm px-2 py-1.5 rounded border border-white/10 focus:border-red-600 outline-none w-full"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Featured Toggle */}
+                  <div className="flex items-center justify-between glass p-3 md:p-4 rounded-xl border border-white/5">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="p-2 bg-red-500/10 rounded-lg">
+                        <ImageIcon className="text-red-500" size={18} />
+                      </div>
+                      <div>
+                        <p className="text-white font-bold text-xs md:text-sm">Feature Banner</p>
+                        <p className="text-gray-500 text-[10px] md:text-xs">Show on home page top</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={isFeatured}
+                        onChange={(e) => setIsFeatured(e.target.checked)}
                       />
                       <div className="w-9 h-5 md:w-11 md:h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 md:after:h-5 md:after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                     </label>

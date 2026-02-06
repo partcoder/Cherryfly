@@ -10,10 +10,12 @@ export interface Movie {
   year: number;
   duration: string;
   genre: string[];
-  createdAt: string; // ISO Date string
+  createdAt: string; // ISO Date string (Start Date)
+  endDate?: string;  // Optional End Date for ranges
   mediaType: 'VIDEO' | 'PHOTO' | 'COMIC';
   folderName?: string; // Custom folder name
   aiStatus: 'COMPLETED' | 'PENDING' | 'FAILED'; // New field for fallback handling
+  isFeatured?: boolean; // New field for home page banner
 }
 
 export interface GeneratedMetadata {
